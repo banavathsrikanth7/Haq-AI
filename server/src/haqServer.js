@@ -1,3 +1,4 @@
+
 // Builds the Haq AI web server. src/index.js starts it; tests build one with a stand-in gateway.
 
 import cors from 'cors';
@@ -16,9 +17,30 @@ export function buildHaqServer(settings, { gateway = new HaqGateway(settings), t
   server.disable('x-powered-by');
   server.set('trust proxy', 1);
 
-  // Only the Haq AI page (CLIENT_ORIGIN, or any localhost port Vite picks) may call the API.
-  const allowed = new Set(settings.browserOrigins);
-  server.use(cors({ origin: (origin, done) => done(null, !origin || allowed.has(origin) || LOCAL_PAGE.test(origin)) }));
+  // Allow only configured frontend origins and local development origins.
+  const allowed = new Set(
+    settings.browserOrigins.map(origin => origin.trim().replace(/\/$/, ''))
+  );
+
+  server.use(cors({
+    origin: (origin, done) => {
+      const normalizedOrigin = origin?.trim().replace(/\/$/, '');
+
+      if (
+        !origin ||
+        allowed.has(normalizedOrigin) ||
+        LOCAL_PAGE.test(normalizedOrigin ?? '')
+      ) {
+        return done(null, true);
+      }
+
+      console.error('CORS blocked origin:', origin);
+      return done(null, false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
+
   server.use(express.json({ limit: '4mb' })); // checked notifications come back with each request
 
   if (logRequests) {
