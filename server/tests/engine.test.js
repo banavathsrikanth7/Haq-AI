@@ -146,3 +146,19 @@ describe('evidence-preserving translation', () => {
     assert.equal(result.kept_original, 1);
   });
 });
+
+describe('official portal', async () => {
+  const { officialPortal } = await import('../src/engine/officialPortal.js');
+  const scheme = (extra) => ({ scheme: { name: 'X', state: null, department: null, apply_url: null, ...extra } });
+  it('prefers the portal printed in the notification', () => {
+    assert.deepEqual(officialPortal(v2()), { url: 'https://scholarships.gov.in/', name: 'scholarships.gov.in', source: 'notification' });
+  });
+  it('uses the verified list, respecting the state', () => {
+    assert.equal(officialPortal(scheme({ name: 'Jagananna Vidya Deevena', state: 'Andhra Pradesh' })).url, 'https://jnanabhumi.ap.gov.in/');
+    assert.equal(officialPortal(scheme({ name: 'Post Matric Scholarship', state: 'Bihar' })).source, 'search');
+    assert.equal(officialPortal(scheme({ name: 'PM-KISAN' })).url, 'https://pmkisan.gov.in/');
+  });
+  it('falls back to a myScheme search with the scheme name', () => {
+    assert.deepEqual(officialPortal(scheme({ name: 'Some Unknown Yojana' })), { url: 'https://www.myscheme.gov.in/search', name: 'myScheme (Government of India)', source: 'search', search_for: 'Some Unknown Yojana' });
+  });
+});

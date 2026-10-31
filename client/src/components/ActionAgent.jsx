@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import Icon from './Icon.jsx';
+import ApplyPortal from './ApplyPortal.jsx';
 import ListenButton from './ListenButton.jsx';
 import { SourceChip } from './Shell.jsx';
 import { actionPlanCalendar, formatDate } from '../lib/schemeMath.js';
@@ -62,7 +63,7 @@ export default function ActionAgent({ lang, plan, href, onTick, onSpeak, voiceOn
                   <span className={`urgency u-${a.urgency}`}>{t(lang, `urgency_${a.urgency}`)}</span>
                 </div>
                 {a.kind === 'portal'
-                  ? <a href={a.detail} target="_blank" rel="noopener noreferrer" onClick={() => onTick?.()}>{a.detail}</a>
+                  ? <ApplyPortal lang={lang} portal={a.portal ?? { url: a.detail, name: a.detail, source: 'notification' }} onOpen={onTick} />
                   : <p>{a.detail}</p>}
                 <div className="plan-meta">
                   {a.due ? <span><Icon name="calendar" size={13} /> {t(lang, 'due')} {formatDate(a.due)}</span> : null}
@@ -104,7 +105,6 @@ export default function ActionAgent({ lang, plan, href, onTick, onSpeak, voiceOn
               </ul>
             )}
           </article>
-          {!checklist.apply_url ? <p className="muted small-text">{t(lang, 'noApplyUrl')}</p> : null}
         </div>
       </div>
     </div>

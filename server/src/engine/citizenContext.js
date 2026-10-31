@@ -6,6 +6,7 @@ import { compareNotifications, isSameScheme, olderThenNewer } from './changeInte
 import { checkEligibility, hasAnyDetail } from './eligibility.js';
 import { impactOnCitizen } from './impactAnalyzer.js';
 import { planActions } from './actionAgent.js';
+import { officialPortal } from './officialPortal.js';
 import { benefitSentence, matchKey, ruleSentence } from './ruleText.js';
 
 export function buildCitizenContext(documents, citizen = {}, today = new Date()) {
@@ -18,6 +19,7 @@ export function buildCitizenContext(documents, citizen = {}, today = new Date())
       department: doc.scheme.department,
       published: doc.scheme.publication_date,
       apply_url: doc.scheme.apply_url,
+      where_to_apply: officialPortal(doc),
       rules: doc.rules.map((r) => ({ rule: ruleSentence(r), description: r.description, page: r.page })),
       benefits: doc.benefits.map((b) => ({ description: b.description, amount: benefitSentence(b), page: b.page })),
       deadlines: doc.deadlines.map((d) => ({ description: d.description, date: d.date, page: d.page })),

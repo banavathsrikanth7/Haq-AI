@@ -21,6 +21,7 @@ import { buildCitizenContext } from '../engine/citizenContext.js';
 import { translateWithEvidence } from '../engine/clauseTranslation.js';
 import { checkEligibility, hasAnyDetail } from '../engine/eligibility.js';
 import { analyzeImpact } from '../engine/impactAnalyzer.js';
+import { officialPortal } from '../engine/officialPortal.js';
 import { NOTIFICATION_SIZE_LIMIT, takeInNotification } from '../intake/documentIntake.js';
 import {
   ActionPlanRequest, AskRequest, ChangeRequest, EligibilityRequest, ImpactRequest, LANGUAGES, SpeakRequest, TranslateRequest, firstProblem,
@@ -84,7 +85,9 @@ export function haqRoutes({ gateway, today = () => new Date() }) {
   // Feature 2 — does this citizen qualify, condition by condition
   router.post('/eligibility', (req, res) => {
     const { notification, citizen } = checked(EligibilityRequest, req.body, 422);
-    res.json({ doc_id: notification.doc_id, scheme_name: notification.scheme.name, ...checkEligibility(notification, citizen) });
+    const result = checkEligibility(notification, citizen);
+    // When the citizen qualifies, say where to apply.
+    res.json({ doc_id: notification.doc_id, scheme_name: notification.scheme.name, ...result, apply: result.verdict === 'eligible' ? officialPortal(notification) : null });
   });
 
   // Feature 4 — who gains or loses from the change, in rupees

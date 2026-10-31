@@ -88,7 +88,10 @@ describe('Haq AI endpoints', () => {
   });
 
   it('Feature 2: eligibility with clear input errors', async () => {
-    assert.equal((await (await post(s.api, '/eligibility', { notification: v2(), citizen: student })).json()).verdict, 'eligible');
+    const ok = await (await post(s.api, '/eligibility', { notification: v2(), citizen: student })).json();
+    assert.equal(ok.verdict, 'eligible');
+    assert.equal(ok.apply.url, 'https://scholarships.gov.in/');
+    assert.equal((await (await post(s.api, '/eligibility', { notification: v1(), citizen: student })).json()).apply, null);
     const bad = await post(s.api, '/eligibility', { notification: v2(), citizen: { annual_family_income_inr: -5 } });
     assert.equal(bad.status, 422);
     assert.deepEqual(await bad.json(), { message: "Income can't be negative.", code: 'invalid_request' });

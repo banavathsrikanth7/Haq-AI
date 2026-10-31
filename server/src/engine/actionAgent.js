@@ -4,6 +4,7 @@
 // from the document carries its page; Haq AI does not add steps the document does not state.
 
 import { MISSING_DETAIL_QUESTIONS } from './eligibility.js';
+import { officialPortal } from './officialPortal.js';
 
 const DAY = 86_400_000;
 const iso = (date) => date.toISOString().slice(0, 10);
@@ -30,6 +31,7 @@ export function applicationChecklist(doc, today = new Date()) {
     days_left: next ? daysBetween(todayIso, next.date) : null,
     all_deadlines: doc.deadlines,
     apply_url: doc.scheme.apply_url,
+    portal: officialPortal(doc),
   };
 }
 
@@ -90,9 +92,15 @@ export function planActions(doc, eligibility, today = new Date()) {
     if (deadline) {
       add({ kind: 'submit', title: 'Submit before the last date', detail: checklist.deadline.description, page: checklist.deadline.page, due: deadline, urgency: urgencyOf(deadline, todayIso) });
     }
-    if (doc.scheme.apply_url) {
-      add({ kind: 'portal', title: 'Apply on the official portal', detail: doc.scheme.apply_url, urgency: deadline ? urgencyOf(deadline, todayIso) : 'anytime' });
-    }
+    // The apply link is given only once the citizen is confirmed eligible.
+    const portal = checklist.portal;
+    if (verdict === 'eligible') add({
+      kind: 'portal',
+      title: portal.source === 'search' ? `Find "${portal.search_for}" on ${portal.name}` : `Apply on the ${portal.name}`,
+      detail: portal.url,
+      portal,
+      urgency: deadline ? urgencyOf(deadline, todayIso) : 'anytime',
+    });
   }
 
   return {
