@@ -1,0 +1,25 @@
+{
+  "name": "haq-ai-client",
+  "version": "1.0.0",
+  "description": "Haq AI page: read scheme notifications, see what changed and who gains, check eligibility, follow a dated action plan, ask by voice in EN / TE / HI",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "license": "MIT",
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.5"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  }
+}
