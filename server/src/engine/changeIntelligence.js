@@ -5,7 +5,7 @@
 import { percentChange } from './rupees.js';
 import { benefitSentence, evidenceOf, matchKey, ruleSentence } from './ruleText.js';
 
-const SECTION_ORDER = ['rules', 'benefits', 'deadlines', 'documents', 'steps'];
+const SECTION_ORDER = ['rules', 'benefits', 'rights', 'deadlines', 'documents', 'steps'];
 
 function revision(section, key, label, kind, before, after, beforeValue, afterValue, beforeText, afterText) {
   return {
@@ -48,6 +48,9 @@ export function compareNotifications(olderDoc, newerDoc) {
     ...compareSection('benefits', olderDoc.benefits, newerDoc.benefits, (b) => matchKey(b.description), {
       label: (b) => b.description.trim(), value: (b) => b.amount_inr, text: benefitSentence,
       isRevised: (a, b) => a.amount_inr !== b.amount_inr || a.frequency !== b.frequency,
+    }),
+    ...compareSection('rights', olderDoc.rights ?? [], newerDoc.rights ?? [], (r) => matchKey(r.text), {
+      label: (r) => r.text, value: (r) => r.text, text: (r) => r.text, isRevised: () => false,
     }),
     ...compareSection('deadlines', olderDoc.deadlines, newerDoc.deadlines, (d) => matchKey(d.description), {
       label: (d) => d.description, value: (d) => d.date, text: (d) => d.date ?? 'not stated',

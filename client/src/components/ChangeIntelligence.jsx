@@ -142,12 +142,27 @@ export default function ChangeIntelligence({ lang, documents, oldId, newId, onPi
         <div className="impact">
           <div className="impact-heading">
             <h3 className="sub-title"><Icon name="wallet" size={18} /> {t(lang, 'impactTitle')}</h3>
-            <span className="pill">{t(lang, 'impactSummary', impact.summary.benefit, impact.summary.lose, impact.summary.unchanged)}</span>
+            <span className="pill">{t(lang, 'impactSummary2', impact.summary.groups_gain, impact.summary.groups_lose)}</span>
           </div>
           <p className="muted small-text">{t(lang, 'impactSub')}</p>
           <div className="impact-grid">
-            {impact.profiles.map((p, i) => <ImpactCard key={i} lang={lang} p={p} />)}
+            {impact.profiles.map((p, i) => <ImpactCard key={`you-${i}`} lang={lang} p={p} />)}
+            {impact.profiles.length === 0 ? <p className="impact-hint card">{t(lang, 'impactYouHint')}</p> : null}
           </div>
+          <h4 className="groups-title">{t(lang, 'groupsTitle')}</h4>
+          {impact.groups.length === 0 ? <p className="empty small">{t(lang, 'noGroups')}</p> : (
+            <ul className="group-list">
+              {impact.groups.map((g, i) => (
+                <li key={i} className={`group-row is-${g.direction}`}>
+                  <span className={`badge ${g.direction === 'gain' ? 'green' : g.direction === 'lose' ? 'red' : 'amber'}`}>
+                    {t(lang, g.direction === 'gain' ? 'groupGain' : g.direction === 'lose' ? 'groupLose' : 'groupChanged')}
+                  </span>
+                  <div><b>{g.who}</b><small>{g.why}</small></div>
+                  {g.page ? <SourceChip lang={lang} page={g.page} quote={null} href={result ? hrefFor(result.newer_id) : null} /> : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ) : null}
     </>

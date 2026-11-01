@@ -81,13 +81,15 @@ describe('Feature 4 — Policy Impact Analyzer', () => {
     const unknown = impactOnCitizen(v1(), v2(), { age: 20 });
     assert.equal(unknown.yearly_gain, null);
   });
-  it('includes example citizens and a summary', () => {
+  it('derives affected groups from the revised rules only', () => {
     const result = analyzeImpact(v1(), v2(), student);
     assert.equal(result.profiles[0].label, 'You');
-    assert.equal(result.profiles.filter((p) => p.illustrative).length, 3);
-    assert.equal(result.summary.benefit_per_year_after, 12000);
-    assert.equal(result.summary.benefit + result.summary.lose + result.summary.unchanged + result.summary.unknown >= result.profiles.length - 1, true);
-    assert.equal(analyzeImpact(v1(), v2(), {}).profiles.some((p) => p.is_user), false);
+    const income = result.groups.find((g) => /family income/.test(g.who));
+    assert.deepEqual([income.direction, income.who, income.why, income.page], ['gain', 'People with family income above ₹2,50,000 and up to ₹3,50,000', 'Now covered', 2]);
+    assert.ok(result.groups.some((g) => g.direction === 'gain' && /PHD/.test(g.who)));
+    assert.ok(result.groups.some((g) => g.who === 'Everyone who receives this benefit' && /₹10,000 → ₹12,000/.test(g.why)));
+    assert.equal(result.summary.groups_lose, 0);
+    assert.equal(analyzeImpact(v1(), v2(), {}).profiles.length, 0);
   });
 });
 
@@ -160,5 +162,40 @@ describe('official portal', async () => {
   });
   it('falls back to a myScheme search with the scheme name', () => {
     assert.deepEqual(officialPortal(scheme({ name: 'Some Unknown Yojana' })), { url: 'https://www.myscheme.gov.in/search', name: 'myScheme (Government of India)', source: 'search', search_for: 'Some Unknown Yojana' });
+  });
+});
+
+describe('spoken explainer guard', async () => {
+  const { spokenExplainer, newNumbers, explainerFacts } = await import('../src/engine/spokenExplainer.js');
+  it('accepts a script that only uses numbers from the facts', async () => {
+    const result = await spokenExplainer(v2(), { olderDoc: v1(), language: 'te' }, async () => 'ఆదాయం ₹3,50,000 వరకు, ₹12,000 సాయం.');
+    assert.deepEqual([result.checked, result.fallback, result.language], [true, false, 'te']);
+  });
+  it('retries once, then speaks a code-built summary if a new number appears', async () => {
+    let calls = 0;
+    const result = await spokenExplainer(v2(), {}, async () => { calls += 1; return 'You get ₹99,999.'; });
+    assert.equal(calls, 2);
+    assert.equal(result.fallback, true);
+    assert.match(result.script, /rupees 12,000/);
+  });
+  it('finds numbers that are not in the facts', () => {
+    assert.deepEqual(newNumbers('Limit 350000 and 7 days', explainerFacts(v2())), ['7']);
+  });
+});
+
+describe('small businesses and rights', async () => {
+  const { cleanRule, cleanRight } = await import('../src/intake/clauseCleaner.js');
+  it('reads MSME conditions', () => {
+    const turnover = cleanRule({ field: 'turnover', operator: 'up to', value: 'Rs. 5 crore', description: 'Turnover limit' });
+    assert.deepEqual([turnover.field, turnover.value, turnover.unit], ['annual_turnover_inr', 50000000, 'INR_per_year']);
+    assert.equal(ruleSentence(turnover), 'Annual turnover ≤ ₹5,00,00,000 per year');
+    assert.deepEqual(cleanRule({ field: 'msme category', operator: 'one of', value: 'Micro enterprise, Small enterprise', description: 'x' }).value, ['micro', 'small']);
+    assert.equal(cleanRule({ field: 'udyam', operator: 'eq', value: 'yes', description: 'x' }).value, true);
+    assert.equal(testCondition({ field: 'udyam_registered', operator: 'eq', value: true }, { udyam_registered: true }), 'passed');
+  });
+  it('keeps rights with their page', () => {
+    assert.deepEqual(cleanRight({ text: 'Grievance settled within 30 days', page: '8' }), { text: 'Grievance settled within 30 days', page: 8, quote: null });
+    const revisions = compareNotifications(v1(), { ...v2(), rights: [{ text: 'Give it up option', page: 2, quote: null }] });
+    assert.ok(revisions.some((r) => r.category === 'rights' && r.change_type === 'added'));
   });
 });

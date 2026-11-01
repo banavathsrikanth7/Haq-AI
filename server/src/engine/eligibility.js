@@ -16,6 +16,9 @@ export const MISSING_DETAIL_QUESTIONS = {
   occupation: 'What is your occupation (student, farmer, worker…)?',
   disability: 'Do you have a certified disability?',
   last_exam_percent: 'What percentage did you score in your last exam?',
+  enterprise_size: 'Is your business micro, small, medium or large?',
+  annual_turnover_inr: "What is your business's annual turnover in rupees?",
+  udyam_registered: 'Is your business registered on Udyam?',
 };
 
 const lower = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : v);

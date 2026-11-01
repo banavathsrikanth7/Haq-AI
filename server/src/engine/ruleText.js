@@ -6,10 +6,11 @@ export const CITIZEN_FIELD_NAMES = {
   age: 'Age', state: 'State', annual_family_income_inr: 'Family income', category: 'Category',
   gender: 'Gender', education_level: 'Education', course: 'Course', institution_type: 'Institution',
   occupation: 'Occupation', disability: 'Disability', last_exam_percent: 'Last exam %',
+  enterprise_size: 'Enterprise size', annual_turnover_inr: 'Annual turnover', udyam_registered: 'Udyam registration',
 };
 const CONDITION_SIGN = { lte: '≤', gte: '≥', eq: '=', in: 'one of', not_in: 'not', between: 'between' };
 
-const isRupeeRule = (rule) => rule.field === 'annual_family_income_inr' || /^INR/i.test(rule.unit ?? '');
+const isRupeeRule = (rule) => rule.field === 'annual_family_income_inr' || rule.field === 'annual_turnover_inr' || /^INR/i.test(rule.unit ?? '');
 
 function valueText(value, inRupees) {
   if (Array.isArray(value)) return value.map((v) => valueText(v, inRupees)).join(', ');

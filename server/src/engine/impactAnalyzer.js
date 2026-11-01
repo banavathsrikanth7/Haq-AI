@@ -1,17 +1,13 @@
 // FEATURE 4 — Policy Impact Analyzer.
-// For the citizen and for typical example citizens, answers two questions about a policy change:
-//   who will benefit (or lose out), and what it is worth to them in rupees.
-// Only amounts printed in the notifications are used; nothing is estimated.
+// Answers two questions about a policy change:
+//   who will benefit (or lose out), and what it is worth in rupees.
+// The groups come only from the two notifications' own rules and amounts (no invented people),
+// and the citizen's own result comes from the details they entered.
 
 import { checkEligibility, hasAnyDetail } from './eligibility.js';
-import { rupees } from './rupees.js';
-
-/** Example citizens shown next to the user's own result. They are illustrations, not data. */
-export const EXAMPLE_CITIZENS = [
-  { label: 'UG student', profile: { age: 20, occupation: 'student', education_level: 'ug', annual_family_income_inr: 300000, category: 'general', institution_type: 'government' } },
-  { label: 'Small farmer', profile: { age: 45, occupation: 'farmer', education_level: 'school', annual_family_income_inr: 150000, category: 'obc' } },
-  { label: 'Senior citizen', profile: { age: 65, occupation: 'other', education_level: 'none', annual_family_income_inr: 100000, category: 'sc' } },
-];
+import { compareNotifications } from './changeIntelligence.js';
+import { CITIZEN_FIELD_NAMES, ruleSentence } from './ruleText.js';
+import { lakhGrouping, rupees } from './rupees.js';
 
 export function verdictShift(before, after) {
   if (before === 'not_eligible' && after === 'eligible') return 'newly_eligible';
@@ -86,21 +82,66 @@ export function impactOnCitizen(olderDoc, newerDoc, citizen) {
   };
 }
 
-/** The citizen (when details are given) plus the example citizens, with a summary of who gains. */
+const fieldName = (field) => (CITIZEN_FIELD_NAMES[field] ?? field).toLowerCase();
+const show = (rule, v) => (rule.field === 'annual_family_income_inr' || rule.field === 'annual_turnover_inr' || /^INR/i.test(rule.unit ?? '') ? rupees(v) : lakhGrouping(v));
+const listText = (values) => values.map((v) => String(v).toUpperCase().length <= 4 ? String(v).toUpperCase() : String(v)).join(', ');
+
+/** Groups of people the change helps or hurts, read straight from the revised rules and benefits. */
+export function affectedGroups(olderDoc, newerDoc) {
+  const groups = [];
+  const add = (direction, who, why, revision) => groups.push({
+    direction, who, why, page: revision.new_citation?.page ?? revision.old_citation?.page ?? null,
+  });
+  const older = new Map(olderDoc.rules.map((r) => [r.rule_id, r]));
+  const newer = new Map(newerDoc.rules.map((r) => [r.rule_id, r]));
+  for (const revision of compareNotifications(olderDoc, newerDoc)) {
+    if (revision.category === 'rules') {
+      const was = older.get(revision.key);
+      const now = newer.get(revision.key);
+      const name = fieldName((now ?? was).field);
+      if (!was) { add('lose', `People who do not meet: ${ruleSentence(now)}`, 'New condition added', revision); continue; }
+      if (!now) { add('gain', `People who did not meet: ${ruleSentence(was)}`, 'Condition removed', revision); continue; }
+      if (was.operator === now.operator && typeof was.value === 'number' && typeof now.value === 'number') {
+        const [lo, hi] = [Math.min(was.value, now.value), Math.max(was.value, now.value)];
+        const raised = now.value > was.value;
+        const gains = (now.operator === 'lte' && raised) || (now.operator === 'gte' && !raised);
+        const band = now.operator === 'lte' ? `above ${show(now, lo)} and up to ${show(now, hi)}` : `from ${show(now, lo)} to below ${show(now, hi)}`;
+        add(gains ? 'gain' : 'lose', `People with ${name} ${band}`, gains ? 'Now covered' : 'No longer covered', revision);
+        continue;
+      }
+      if (['in', 'not_in'].includes(was.operator) && was.operator === now.operator && Array.isArray(was.value) && Array.isArray(now.value)) {
+        const before = new Set(was.value.map(String));
+        const after = new Set(now.value.map(String));
+        const added = [...after].filter((v) => !before.has(v));
+        const removed = [...before].filter((v) => !after.has(v));
+        const [inGain, inLose] = now.operator === 'in' ? [added, removed] : [removed, added];
+        if (inGain.length) add('gain', `People whose ${name} is ${listText(inGain)}`, 'Now covered', revision);
+        if (inLose.length) add('lose', `People whose ${name} is ${listText(inLose)}`, 'No longer covered', revision);
+        continue;
+      }
+      add('changed', `People affected by: ${ruleSentence(now)}`, `Was: ${ruleSentence(was)}`, revision);
+    }
+    if (revision.category === 'benefits' && revision.change_type === 'modified' && typeof revision.old_value === 'number' && typeof revision.new_value === 'number') {
+      const more = revision.new_value > revision.old_value;
+      add(more ? 'gain' : 'lose', 'Everyone who receives this benefit',
+        `${revision.label}: ${rupees(revision.old_value)} → ${rupees(revision.new_value)}`, revision);
+    }
+  }
+  return groups;
+}
+
+/** The citizen's own result (when details are given) and the groups the change affects. */
 export function analyzeImpact(olderDoc, newerDoc, citizen) {
-  const people = [];
-  if (hasAnyDetail(citizen)) people.push({ label: 'You', is_user: true, illustrative: false, profile: citizen });
-  for (const example of EXAMPLE_CITIZENS) people.push({ label: example.label, is_user: false, illustrative: true, profile: example.profile });
-  const profiles = people.map((p) => ({ ...p, ...impactOnCitizen(olderDoc, newerDoc, p.profile) }));
-  const gains = (p) => p.transition === 'newly_eligible' || (p.yearly_gain ?? 0) > 0 || (p.one_time_gain ?? 0) > 0;
-  const loses = (p) => p.transition === 'no_longer_eligible' || (p.yearly_gain ?? 0) < 0 || (p.one_time_gain ?? 0) < 0;
+  const profiles = hasAnyDetail(citizen)
+    ? [{ label: 'You', is_user: true, illustrative: false, profile: citizen, ...impactOnCitizen(olderDoc, newerDoc, citizen) }]
+    : [];
+  const groups = affectedGroups(olderDoc, newerDoc);
   return {
     profiles,
+    groups,
     summary: {
-      benefit: profiles.filter(gains).length,
-      lose: profiles.filter(loses).length,
-      unchanged: profiles.filter((p) => !gains(p) && !loses(p) && p.transition !== 'needs_info').length,
-      unknown: profiles.filter((p) => p.transition === 'needs_info').length,
+      groups_gain: groups.filter((g) => g.direction === 'gain').length,
+      groups_lose: groups.filter((g) => g.direction === 'lose').length,
       benefit_per_year_before: benefitValue(olderDoc).yearly,
       benefit_per_year_after: benefitValue(newerDoc).yearly,
     },

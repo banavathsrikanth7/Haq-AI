@@ -5,6 +5,7 @@
 //   POST /api/impact               Feature 4  Policy Impact Analyzer
 //   POST /api/action-plan          Feature 5  Citizen Action Agent
 //   POST /api/ask                  Feature 3  multilingual assistant (typed or spoken question)
+//   POST /api/explain              Feature 3  one-tap spoken explainer (numbers checked against the facts)
 //   POST /api/voice/listen         Feature 3  speech → text   (Sarvam)
 //   POST /api/voice/speak          Feature 3  text → speech   (Sarvam)
 //   POST /api/translate            clause translation that keeps every number and page
@@ -19,12 +20,13 @@ import { planActions } from '../engine/actionAgent.js';
 import { compareNotifications, isSameScheme, olderThenNewer, tallyRevisions } from '../engine/changeIntelligence.js';
 import { buildCitizenContext } from '../engine/citizenContext.js';
 import { translateWithEvidence } from '../engine/clauseTranslation.js';
+import { spokenExplainer } from '../engine/spokenExplainer.js';
 import { checkEligibility, hasAnyDetail } from '../engine/eligibility.js';
 import { analyzeImpact } from '../engine/impactAnalyzer.js';
 import { officialPortal } from '../engine/officialPortal.js';
 import { NOTIFICATION_SIZE_LIMIT, takeInNotification } from '../intake/documentIntake.js';
 import {
-  ActionPlanRequest, AskRequest, ChangeRequest, EligibilityRequest, ImpactRequest, LANGUAGES, SpeakRequest, TranslateRequest, firstProblem,
+  ActionPlanRequest, AskRequest, ChangeRequest, EligibilityRequest, ExplainRequest, ImpactRequest, LANGUAGES, SpeakRequest, TranslateRequest, firstProblem,
 } from '../models/policySchemas.js';
 import { HaqProblem, asHaqProblem } from '../problems.js';
 
@@ -112,6 +114,16 @@ export function haqRoutes({ gateway, today = () => new Date() }) {
       res.json(await gateway.answerCitizen({ question, history, citizenContext, language }));
     } catch (error) {
       throw asHaqProblem(error, 'Haq AI could not answer: ');
+    }
+  });
+
+  router.post('/explain', limited, async (req, res) => {
+    const { notification, older, citizen, language } = checked(ExplainRequest, req.body, 422);
+    try {
+      res.json(await spokenExplainer(notification, { olderDoc: older ?? null, citizen, language },
+        (facts, lang, strict) => gateway.explainNotification(facts, lang, strict)));
+    } catch (error) {
+      throw asHaqProblem(error, 'Haq AI could not prepare the spoken summary: ');
     }
   });
 

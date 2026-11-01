@@ -12,17 +12,40 @@ Government schemes change through notifications: an income limit is raised, an a
 |---|---|---|---|---|
 | 1 | **Policy Change Intelligence Engine** | Every rule, benefit, date, document and step that was added, withdrawn or revised between two notifications of a scheme — before → now, % change, page in each version | `server/src/engine/changeIntelligence.js` | `ChangeIntelligence.jsx` |
 | 2 | **Personalized Eligibility** | Asks only the questions this notification's rules need; verdict with every condition marked met / not met / not known, plus follow-up questions | `server/src/engine/eligibility.js` | `EligibilityCheck.jsx` |
-| 3 | **Voice agent** | Ask by speaking (Telugu, Hindi, English), answers read aloud automatically, **Listen** on the verdict and on the action plan | `server/src/ai/haqGateway.js` (Sarvam) + `/api/ask` | `VoiceAssistant.jsx`, `ListenButton.jsx` |
-| 4 | **Policy Impact Analyzer** | Who gains and who loses from the change — you and three example citizens — with ₹ per year before, now and the difference, and a plain sentence on what it means | `server/src/engine/impactAnalyzer.js` | `ChangeIntelligence.jsx` |
+| 3 | **Voice agent** | One-tap **Listen to a summary** of the notification in EN / TE / HI (every number checked against the notification), ask by speaking, answers read aloud, **Listen** on the verdict and the action plan, stop any time | `server/src/engine/spokenExplainer.js`, `server/src/ai/haqGateway.js` (Gemini + Sarvam) | `SpokenSummary.jsx`, `VoiceAssistant.jsx`, `ListenButton.jsx` |
+| 4 | **Policy Impact Analyzer** | Your own ₹ per year before, now and the difference; plus the groups the change adds or removes, read straight from the revised rules ("People with family income above ₹2,50,000 and up to ₹3,50,000 — now covered"), each with its page. No invented people. | `server/src/engine/impactAnalyzer.js` | `ChangeIntelligence.jsx` |
 | 5 | **Citizen Action Agent** | Ordered plan: confirm missing details, or why you do not qualify, or collect documents → follow steps → submit by the last date → official portal; each with due date, urgency and page; document checklist; calendar file (.ics) | `server/src/engine/actionAgent.js` | `ActionAgent.jsx` |
 
 Also covered from the differentiation table:
 
 - **Evidence with every answer** — each clause carries the PDF page and the exact quote; the page chip opens the uploaded PDF at that page.
 - **Legal conditions preserved across translation** — `POST /api/translate` translates clauses into Telugu or Hindi, then `server/src/engine/clauseTranslation.js` checks that every number (₹ amount, age, %, date, also in Telugu/Devanagari digits) is still there. If one is missing or changed, the original wording is shown with a warning. Pages and quotes are always kept.
+- **Rights, not just rules** — the notification's own guarantees (grievance time limits, appeals, opt-outs) are extracted into **Your rights**, compared across versions and translated.
+- **Citizens and small businesses** — eligibility understands MSME conditions too: enterprise size (micro / small / medium / large), annual turnover and Udyam registration.
+- **Robust under bad networks** — every request has a time limit, a dropped connection is retried once, an offline banner appears, and the server status is re-checked until it is back.
 - **Conversational explanation** — the assistant answers only from `citizenContext`, which code builds from the notifications: rules, verdict, revisions, impact and the action plan.
 
 ## Where Gemini stops and code takes over
+
+```mermaid
+flowchart LR
+    U[Citizen or small business<br/>PDF / photo / text · voice] --> C[React + Vite page<br/>EN · తెలుగు · हिंदी · light/dark]
+    C -->|upload| R[Gemini policy reader<br/>notification → clauses with page + quote]
+    R --> K[Clause cleaner + schema checks<br/>₹ lakh/crore, dates, synonyms;<br/>invalid clauses skipped with a reason]
+    K --> E{{Deterministic engine · Node.js}}
+    E --> F1[1 · Change intelligence]
+    E --> F2[2 · Eligibility, rule by rule]
+    E --> F4[4 · Impact: you + affected groups in ₹]
+    E --> F5[5 · Action plan + portal + .ics]
+    E --> T[Translation guard<br/>numbers must survive]
+    F1 & F2 & F4 & F5 --> X[citizenContext facts]
+    X --> G[Gemini explains facts<br/>chat + spoken summary,<br/>number check on every script]
+    G --> V[Sarvam voice<br/>speech ↔ text]
+    V --> C
+    T --> C
+```
+
+The same flow in steps:
 
 ```
 notification (PDF / photo / text)
@@ -30,12 +53,12 @@ notification (PDF / photo / text)
    ▼
 clause cleaner  ("₹2.5 lakh" → 250000, "14/09/2026" → 2026-09-14)  ← intake/clauseCleaner.js
    ▼
-clause checks   (each rule, benefit, date, document, step on its own;
+clause checks   (each rule, benefit, right, date, document, step on its own;
                  a clause that fails is skipped and listed)     ← intake/documentIntake.js, models/policySchemas.js
    ▼
 engine (plain code, no AI): changes · eligibility · impact ₹ · action plan · translation number check
    ▼
-Gemini explains the computed facts in EN / TE / HI (CITIZEN_HELPER), Sarvam speaks them
+Gemini explains the computed facts in EN / TE / HI (CITIZEN_HELPER, NOTIFICATION_EXPLAINER), Sarvam speaks them
 ```
 
 Gemini never decides eligibility, never does arithmetic and never invents a date. If something is not printed in the notification, Haq says so.
@@ -44,10 +67,11 @@ Gemini never decides eligibility, never does arithmetic and never invents a date
 
 ```
 HaqAI/
-├── Prompts/                      # Review copies of the three Gemini instructions (a test keeps them identical)
+├── Prompts/                      # Review copies of the four Gemini instructions (a test keeps them identical)
 │   ├── policy-reader.txt
 │   ├── citizen-helper.txt
-│   └── clause-translator.txt
+│   ├── clause-translator.txt
+│   └── notification-explainer.txt
 ├── server/
 │   ├── scripts/model-speed-test.js     # Which Gemini model answers fastest with your key
 │   ├── src/
@@ -67,13 +91,15 @@ HaqAI/
 │   │       ├── impactAnalyzer.js       # Feature 4
 │   │       ├── actionAgent.js          # Feature 5
 │   │       ├── clauseTranslation.js    # Number-checked translation
+│   │       ├── spokenExplainer.js      # One-tap spoken summary, numbers checked
+│   │       ├── officialPortal.js       # Where to apply (printed link → checked list → myScheme search)
 │   │       ├── citizenContext.js       # Facts the assistant may use
 │   │       ├── ruleText.js, rupees.js  # Readable rules, ₹ with lakh grouping
 │   └── tests/                          # engine, intake, gateway, routes (synthetic fixture only)
 └── client/
     ├── src/App.jsx
     ├── src/components/   NotificationIntake · NotificationShelf · SchemeSnapshot · ClauseTranslation
-    │                     ChangeIntelligence · EligibilityCheck · ActionAgent · VoiceAssistant · ListenButton · Shell · Icon
+    │                     ChangeIntelligence · EligibilityCheck · ActionAgent · ApplyPortal · VoiceAssistant · SpokenSummary · ListenButton · Shell · Icon
     ├── src/lib/          haqApi.js (server calls) · schemeMath.js (₹, dates, .ics) · i18n.js (EN/TE/HI) · hooks.js
     └── tests/schemeMath.test.js
 ```
@@ -132,6 +158,7 @@ All errors come back as `{ "message": "...", "code": "..." }`.
 | POST | `/api/action-plan` | `{notification, citizen}` → `{verdict, headline, actions[{kind, title, detail, due, urgency, page}], checklist, days_left}` |
 | POST | `/api/ask` | `{question, history, notifications, citizen, language}` → `{reply}` |
 | POST | `/api/translate` | `{notification, language: te/hi}` → `{clauses[{original, translated, kept_original, page, quote}], kept_original}` |
+| POST | `/api/explain` | `{notification, older?, citizen, language}` → `{script, language, checked, fallback}` (numbers in the script verified against the notification) |
 | POST | `/api/voice/listen` | multipart `audio`, `language` → `{text}` |
 | POST | `/api/voice/speak` | `{text, language}` → `{audio_base64, mime_type}` |
 
@@ -140,7 +167,7 @@ Codes you may see: `invalid_request`, `same_notification`, `not_about_schemes` (
 ## Tests
 
 ```bash
-cd server && npm test    # 42 tests: five features, clause cleaner, translation check, gateway (fetch stubbed), endpoints
+cd server && npm test    # 59 tests: five features, affected groups, MSME fields, rights, spoken-summary number check, clause cleaner, translation check, gateway (fetch stubbed), endpoints
 cd client && npm test    # ₹ formatting, version pairing, calendar file
 ```
 
@@ -152,7 +179,7 @@ The tests use a synthetic `TEST-SCHOLARSHIP` fixture that exists only in `server
 - The server log has route, status and time only.
 - Haq AI is informational. It is not a government website; the department and its portal have the final word.
 - Rules that cannot be expressed as a check (for example "domicile for 10 years") are listed under **Things the notification did not make clear** rather than checked.
-- Example citizens in the impact view are illustrations, labelled as such.
+- No sample or mock data ships with the app: every result comes from a notification the user uploads and the details they enter. The only fixture (`TEST-SCHOLARSHIP`) lives in `server/tests` and is never loaded by the running app.
 
 ## When something is off
 

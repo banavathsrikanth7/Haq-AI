@@ -8,7 +8,7 @@
 
 import { KeyNotSet, NotAboutSchemes } from '../problems.js';
 import { hasGeminiKey, hasSarvamKey } from '../settings.js';
-import { CITIZEN_HELPER, CLAUSE_TRANSLATOR, NOT_A_NOTIFICATION, NOT_A_SCHEME_QUESTION, POLICY_READER } from './instructions.js';
+import { CITIZEN_HELPER, CLAUSE_TRANSLATOR, NOT_A_NOTIFICATION, NOT_A_SCHEME_QUESTION, NOTIFICATION_EXPLAINER, POLICY_READER } from './instructions.js';
 
 export const GEMINI_KEY_NOT_SET = 'Haq AI cannot read notifications yet: add AI_API_KEY (Gemini) to server/.env and restart the server.';
 export const SARVAM_KEY_NOT_SET = 'Voice is off: add SARVAM_API_KEY to server/.env and restart the server.';
@@ -199,6 +199,7 @@ export class HaqGateway {
       deadlines: listOf(reading?.deadlines),
       required_documents: listOf(reading?.required_documents),
       application_steps: listOf(reading?.application_steps),
+      rights: listOf(reading?.rights),
       notes: listOf(reading?.notes).filter((n) => typeof n === 'string'),
     };
   }
@@ -217,6 +218,18 @@ export class HaqGateway {
     if (result?.in_scope === false) throw new NotAboutSchemes(reply || NOT_A_SCHEME_QUESTION);
     if (!reply) throw new Error('Gemini sent an empty answer.');
     return { reply, source: result?.source === 'general' ? 'general' : 'notification' };
+  }
+
+  /** Facts (built in code) → a short spoken script. `strict` = second try after a number check failed. */
+  async explainNotification(facts, language, strict = false) {
+    const note = strict ? 'Your previous script used a number that is not in the facts. Use only numbers that appear in the facts.\n\n' : '';
+    const result = await this.#askGemini({
+      job: 'answer',
+      instruction: NOTIFICATION_EXPLAINER,
+      parts: [{ text: `${note}${JSON.stringify({ language, facts })}` }],
+      maxOutputTokens: 4096,
+    });
+    return typeof result?.script === 'string' ? result.script : '';
   }
 
   /** [{id, text}] → Map(id → translated text). Numbers are verified afterwards in engine/clauseTranslation.js. */

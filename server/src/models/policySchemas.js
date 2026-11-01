@@ -7,11 +7,14 @@ import { z } from 'zod';
 export const CITIZEN_FIELDS = [
   'age', 'state', 'annual_family_income_inr', 'category', 'gender', 'education_level',
   'course', 'institution_type', 'occupation', 'disability', 'last_exam_percent',
+  // small businesses (MSME schemes)
+  'enterprise_size', 'annual_turnover_inr', 'udyam_registered',
 ];
 export const CONDITION_OPERATORS = ['lte', 'gte', 'eq', 'in', 'not_in', 'between'];
 export const CATEGORIES = ['general', 'obc', 'sc', 'st', 'ews'];
 export const EDUCATION_LEVELS = ['school', 'diploma', 'ug', 'pg', 'phd', 'none'];
-export const OCCUPATIONS = ['student', 'farmer', 'worker', 'self_employed', 'unemployed', 'other'];
+export const OCCUPATIONS = ['student', 'farmer', 'worker', 'self_employed', 'business_owner', 'unemployed', 'other'];
+export const ENTERPRISE_SIZES = ['micro', 'small', 'medium', 'large'];
 export const LANGUAGES = ['en', 'te', 'hi'];
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD');
@@ -47,6 +50,8 @@ export const BenefitClause = z.object({
 
 export const DeadlineClause = z.object({ description: z.string().min(1).max(300), date: isoDate.nullable(), page, quote });
 export const RequiredDocumentClause = z.object({ name: z.string().min(1).max(200), page, quote });
+// A right the notification gives the citizen: a grievance time limit, an appeal, an opt-out, a protection.
+export const RightClause = z.object({ text: z.string().min(1).max(400), page, quote });
 export const ApplicationStepClause = z.object({ order: z.number().int().min(1), text: z.string().min(1).max(500), page, quote });
 
 export const SchemeHeader = z.object({
@@ -68,6 +73,7 @@ export const GeminiReading = z.object({
   deadlines: z.array(z.unknown()),
   required_documents: z.array(z.unknown()),
   application_steps: z.array(z.unknown()),
+  rights: z.array(z.unknown()).default([]),
   notes: z.array(z.string()),
 });
 
@@ -81,6 +87,7 @@ export const SchemeNotification = z.object({
   deadlines: z.array(DeadlineClause),
   required_documents: z.array(RequiredDocumentClause),
   application_steps: z.array(ApplicationStepClause),
+  rights: z.array(RightClause).default([]),
   notes: z.array(z.string()),
 });
 
@@ -96,6 +103,9 @@ export const CitizenDetails = z.object({
   occupation: z.enum(OCCUPATIONS).nullish(),
   disability: z.boolean().nullish(),
   last_exam_percent: z.number().min(0, 'Percentage must be between 0 and 100.').max(100, 'Percentage must be between 0 and 100.').nullish(),
+  enterprise_size: z.enum(ENTERPRISE_SIZES).nullish(),
+  annual_turnover_inr: z.number().min(0, "Turnover can't be negative.").nullish(),
+  udyam_registered: z.boolean().nullish(),
 }).strict();
 
 const Language = z.enum(LANGUAGES, { message: 'Please choose English, Telugu or Hindi.' });
@@ -113,6 +123,7 @@ export const AskRequest = z.object({
   language: Language.default('en'),
 });
 export const TranslateRequest = z.object({ notification: SchemeNotification, language: z.enum(['te', 'hi'], { message: 'Translation is available in Telugu and Hindi.' }) });
+export const ExplainRequest = z.object({ notification: SchemeNotification, older: SchemeNotification.nullish(), citizen: CitizenDetails.default({}), language: Language.default('en') });
 export const SpeakRequest = z.object({ text: z.string().trim().min(1).max(1500), language: Language.default('en') });
 
 /** First problem in a request, as one readable line, e.g. "profile.age: Age must be between 0 and 120." */

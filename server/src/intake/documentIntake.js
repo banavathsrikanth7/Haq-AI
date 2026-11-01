@@ -7,9 +7,9 @@ import { createHash } from 'node:crypto';
 
 import { HaqProblem, asHaqProblem } from '../problems.js';
 import {
-  ApplicationStepClause, BenefitClause, DeadlineClause, EligibilityClause, GeminiReading, RequiredDocumentClause, SchemeHeader, firstProblem,
+  ApplicationStepClause, BenefitClause, RightClause, DeadlineClause, EligibilityClause, GeminiReading, RequiredDocumentClause, SchemeHeader, firstProblem,
 } from '../models/policySchemas.js';
-import { cleanBenefit, cleanDeadline, cleanRequiredDocument, cleanRule, cleanSchemeHeader, cleanStep } from './clauseCleaner.js';
+import { cleanBenefit, cleanDeadline, cleanRequiredDocument, cleanRight, cleanRule, cleanSchemeHeader, cleanStep } from './clauseCleaner.js';
 
 export const NOTIFICATION_SIZE_LIMIT = 15 * 1024 * 1024; // 15 MB
 export const GEMINI_TEXT_LIMIT = 120_000;
@@ -104,6 +104,7 @@ export async function takeInNotification({ text, file }, gateway) {
     deadlines: keepValidClauses('deadlines', data.deadlines, cleanDeadline, DeadlineClause, skipped),
     required_documents: keepValidClauses('required_documents', data.required_documents, cleanRequiredDocument, RequiredDocumentClause, skipped),
     application_steps: keepValidClauses('application_steps', data.application_steps, cleanStep, ApplicationStepClause, skipped),
+    rights: keepValidClauses('rights', data.rights, cleanRight, RightClause, skipped),
     notes: data.notes,
   };
 
@@ -111,6 +112,6 @@ export async function takeInNotification({ text, file }, gateway) {
     notification,
     skipped_clauses: skipped,
     clause_count: notification.rules.length + notification.benefits.length + notification.deadlines.length +
-      notification.required_documents.length + notification.application_steps.length,
+      notification.required_documents.length + notification.application_steps.length + notification.rights.length,
   };
 }

@@ -11,14 +11,18 @@ import { QUESTIONS, t } from '../lib/i18n.js';
 const OPTIONS = {
   category: [['general', 'General'], ['obc', 'OBC'], ['sc', 'SC'], ['st', 'ST'], ['ews', 'EWS']],
   education_level: [['school', 'School'], ['diploma', 'Diploma / ITI'], ['ug', 'UG (degree)'], ['pg', 'PG (masters)'], ['phd', 'PhD'], ['none', 'Not studying']],
-  occupation: [['student', 'Student'], ['farmer', 'Farmer'], ['worker', 'Worker'], ['self_employed', 'Self-employed'], ['unemployed', 'Unemployed'], ['other', 'Other']],
+  occupation: [['student', 'Student'], ['farmer', 'Farmer'], ['worker', 'Worker'], ['self_employed', 'Self-employed'], ['business_owner', 'Business owner'], ['unemployed', 'Unemployed'], ['other', 'Other']],
   gender: [['female', 'Female'], ['male', 'Male'], ['other', 'Other']],
   institution_type: [['government', 'Government'], ['private', 'Private'], ['other', 'Other']],
   disability: [[true, 'Yes'], [false, 'No']],
+  enterprise_size: [['micro', 'Micro'], ['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']],
+  udyam_registered: [[true, 'Yes'], [false, 'No']],
 };
-const FIELD_ICON = { age: 'userCheck', annual_family_income_inr: 'wallet', category: 'list', education_level: 'book', state: 'home', gender: 'userCheck', occupation: 'userCheck', course: 'book', institution_type: 'home', disability: 'shield', last_exam_percent: 'list' };
+const FIELD_ICON = { age: 'userCheck', annual_family_income_inr: 'wallet', category: 'list', education_level: 'book', state: 'home', gender: 'userCheck', occupation: 'userCheck', course: 'book', institution_type: 'home', disability: 'shield', last_exam_percent: 'list', enterprise_size: 'wallet', annual_turnover_inr: 'wallet', udyam_registered: 'file' };
 const STATES = ['Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'];
 const INCOME_CHIPS = [100000, 250000, 500000, 800000];
+const TURNOVER_CHIPS = [1000000, 5000000, 20000000, 100000000];
+const inWords = (v) => (v >= 10000000 ? `${(v / 10000000).toLocaleString('en-IN', { maximumFractionDigits: 2 })} crore` : v >= 100000 ? `${(v / 100000).toLocaleString('en-IN', { maximumFractionDigits: 2 })} lakh` : '');
 const ALL_FIELDS = ['age', 'annual_family_income_inr', 'category', 'education_level', 'state', 'occupation'];
 
 function QuestionInput({ field, value, onChange, onAutoNext }) {
@@ -44,16 +48,17 @@ function QuestionInput({ field, value, onChange, onAutoNext }) {
       </div>
     );
   }
-  if (field === 'annual_family_income_inr') {
+  if (field === 'annual_family_income_inr' || field === 'annual_turnover_inr') {
+    const chips = field === 'annual_turnover_inr' ? TURNOVER_CHIPS : INCOME_CHIPS;
     return (
       <div>
         <div className="money-input">
           <span>₹</span>
           <input type="number" inputMode="numeric" min={0} value={value ?? ''} placeholder="2,50,000" onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))} autoFocus />
         </div>
-        <p className="money-words">{typeof value === 'number' ? `₹${lakhGrouping(value)} per year${value >= 100000 ? ` · ${(value / 100000).toLocaleString('en-IN', { maximumFractionDigits: 2 })} lakh` : ''}` : ' '}</p>
+        <p className="money-words">{typeof value === 'number' ? `₹${lakhGrouping(value)} per year${inWords(value) ? ` · ${inWords(value)}` : ''}` : ' '}</p>
         <div className="quick-chips">
-          {INCOME_CHIPS.map((v) => <button key={v} type="button" className={value === v ? 'is-selected' : ''} onClick={() => onChange(v)}>{v >= 100000 ? `${v / 100000} lakh` : rupees(v)}</button>)}
+          {chips.map((v) => <button key={v} type="button" className={value === v ? 'is-selected' : ''} onClick={() => onChange(v)}>{inWords(v) || rupees(v)}</button>)}
         </div>
       </div>
     );

@@ -30,6 +30,7 @@ export function readableClauses(doc) {
   return [
     ...doc.rules.map((r) => ({ id: `rule:${r.rule_id}`, section: 'rules', text: `${r.description} — ${ruleSentence(r)}`, page: r.page, quote: r.quote })),
     ...doc.benefits.map((b, i) => ({ id: `benefit:${i}`, section: 'benefits', text: `${b.description} — ${benefitSentence(b)}`, page: b.page, quote: b.quote })),
+    ...(doc.rights ?? []).map((r, i) => ({ id: `right:${i}`, section: 'rights', text: r.text, page: r.page, quote: r.quote })),
     ...doc.deadlines.map((d, i) => ({ id: `deadline:${i}`, section: 'deadlines', text: `${d.description}${d.date ? ` — ${d.date}` : ''}`, page: d.page, quote: d.quote })),
     ...doc.required_documents.map((d, i) => ({ id: `document:${i}`, section: 'documents', text: d.name, page: d.page, quote: d.quote })),
     ...doc.application_steps.map((s) => ({ id: `step:${s.order}`, section: 'steps', text: s.text, page: s.page, quote: s.quote })),

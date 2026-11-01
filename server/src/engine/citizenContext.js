@@ -25,6 +25,7 @@ export function buildCitizenContext(documents, citizen = {}, today = new Date())
       deadlines: doc.deadlines.map((d) => ({ description: d.description, date: d.date, page: d.page })),
       required_documents: doc.required_documents.map((d) => ({ name: d.name, page: d.page })),
       application_steps: doc.application_steps.map((s) => ({ order: s.order, text: s.text, page: s.page })),
+      citizen_rights: (doc.rights ?? []).map((r) => ({ right: r.text, page: r.page })),
       unclear_in_document: doc.notes,
       eligibility_for_user: {
         verdict: verdict.verdict,

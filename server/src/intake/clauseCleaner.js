@@ -3,7 +3,7 @@
 // "Scheduled Caste", "14/09/2026"). This file rewrites what Gemini read into the one form the
 // eligibility engine understands. Clauses that still do not fit are dropped by policySchemas.js.
 
-import { CATEGORIES, EDUCATION_LEVELS, OCCUPATIONS, CONDITION_OPERATORS, CITIZEN_FIELDS } from '../models/policySchemas.js';
+import { CATEGORIES, EDUCATION_LEVELS, ENTERPRISE_SIZES, OCCUPATIONS, CONDITION_OPERATORS, CITIZEN_FIELDS } from '../models/policySchemas.js';
 
 const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
 const pad = (n) => String(n).padStart(2, '0');
@@ -46,6 +46,9 @@ export function readRupees(value) {
 }
 
 const FIELD_SYNONYMS = {
+  turnover: 'annual_turnover_inr', annual_turnover: 'annual_turnover_inr', business_turnover: 'annual_turnover_inr',
+  msme_category: 'enterprise_size', enterprise_category: 'enterprise_size', enterprise_type: 'enterprise_size', business_size: 'enterprise_size',
+  udyam: 'udyam_registered', udyam_registration: 'udyam_registered', msme_registered: 'udyam_registered',
   income: 'annual_family_income_inr', family_income: 'annual_family_income_inr', annual_income: 'annual_family_income_inr',
   annual_family_income: 'annual_family_income_inr', parental_income: 'annual_family_income_inr', household_income: 'annual_family_income_inr',
   caste: 'category', social_category: 'category', marks: 'last_exam_percent', percentage: 'last_exam_percent',
@@ -64,7 +67,7 @@ const EDUCATION_SYNONYMS = {
   doctorate: 'phd', 'ph.d': 'phd', 'ph.d.': 'phd', polytechnic: 'diploma', iti: 'diploma',
   'class 10': 'school', 'class 12': 'school', matric: 'school', 'post-matric': 'school', 'pre-matric': 'school', 'secondary': 'school', 'higher secondary': 'school', intermediate: 'school',
 };
-const OCCUPATION_SYNONYMS = { labourer: 'worker', labour: 'worker', 'daily wage': 'worker', employee: 'worker', 'self-employed': 'self_employed', business: 'self_employed', cultivator: 'farmer', agriculturist: 'farmer' };
+const OCCUPATION_SYNONYMS = { labourer: 'worker', labour: 'worker', 'daily wage': 'worker', employee: 'worker', 'self-employed': 'self_employed', business: 'business_owner', entrepreneur: 'business_owner', msme: 'business_owner', trader: 'business_owner', cultivator: 'farmer', agriculturist: 'farmer' };
 
 function mapEnum(value, allowed, synonyms) {
   const v = String(value).trim().toLowerCase();
@@ -74,8 +77,9 @@ function mapEnum(value, allowed, synonyms) {
   return key ? synonyms[key] : v;
 }
 
-const ENUM_FIELDS = { category: [CATEGORIES, CATEGORY_SYNONYMS], education_level: [EDUCATION_LEVELS, EDUCATION_SYNONYMS], occupation: [OCCUPATIONS, OCCUPATION_SYNONYMS] };
-const NUMERIC_FIELDS = new Set(['age', 'annual_family_income_inr', 'last_exam_percent']);
+const SIZE_SYNONYMS = { 'micro enterprise': 'micro', 'small enterprise': 'small', 'medium enterprise': 'medium', msme: 'micro' };
+const ENUM_FIELDS = { category: [CATEGORIES, CATEGORY_SYNONYMS], education_level: [EDUCATION_LEVELS, EDUCATION_SYNONYMS], occupation: [OCCUPATIONS, OCCUPATION_SYNONYMS], enterprise_size: [ENTERPRISE_SIZES, SIZE_SYNONYMS] };
+const NUMERIC_FIELDS = new Set(['age', 'annual_family_income_inr', 'last_exam_percent', 'annual_turnover_inr']);
 
 const toPage = (v) => {
   const n = typeof v === 'string' ? Number.parseInt(v, 10) : v;
@@ -103,7 +107,7 @@ export function cleanRule(raw) {
   } else {
     value = Array.isArray(value) && value.length === 1 ? cleanOne(value[0]) : cleanOne(value);
   }
-  if (field === 'disability' && typeof value === 'string') value = ['yes', 'true', '1'].includes(value);
+  if ((field === 'disability' || field === 'udyam_registered') && typeof value === 'string') value = ['yes', 'true', '1'].includes(value);
 
   const ruleId = String(raw.rule_id ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') ||
     `${field}_${operator === 'lte' ? 'max' : operator === 'gte' ? 'min' : operator}`;
@@ -113,7 +117,7 @@ export function cleanRule(raw) {
     field,
     operator,
     value,
-    unit: typeof raw.unit === 'string' && raw.unit.trim() ? raw.unit.trim() : field === 'annual_family_income_inr' ? 'INR_per_year' : null,
+    unit: typeof raw.unit === 'string' && raw.unit.trim() ? raw.unit.trim() : field === 'annual_family_income_inr' || field === 'annual_turnover_inr' ? 'INR_per_year' : null,
     description: str(raw.description) || `${field} ${operator} ${Array.isArray(value) ? value.join(', ') : value}`,
     page: toPage(raw.page),
     quote: toQuote(raw.quote),
@@ -140,6 +144,9 @@ export const cleanDeadline = (raw) => (raw && typeof raw === 'object'
 export const cleanRequiredDocument = (raw) => (raw && typeof raw === 'object'
   ? { name: str(raw.name), page: toPage(raw.page), quote: toQuote(raw.quote) }
   : typeof raw === 'string' ? { name: raw.trim(), page: null, quote: null } : raw);
+export const cleanRight = (raw) => (raw && typeof raw === 'object'
+  ? { text: str(raw.text), page: toPage(raw.page), quote: toQuote(raw.quote) }
+  : typeof raw === 'string' ? { text: raw.trim(), page: null, quote: null } : raw);
 export const cleanStep = (raw, index) => (raw && typeof raw === 'object'
   ? { order: Number.isInteger(raw.order) && raw.order > 0 ? raw.order : index + 1, text: str(raw.text), page: toPage(raw.page), quote: toQuote(raw.quote) }
   : raw);

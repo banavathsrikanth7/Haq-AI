@@ -1,6 +1,7 @@
 // "Your scheme at a glance": metric tiles, who can apply, what you get, important dates.
 import Icon from './Icon.jsx';
 import { SourceChip } from './Shell.jsx';
+import SpokenSummary from './SpokenSummary.jsx';
 import { daysBetween, formatDate, rupees, todayIso } from '../lib/schemeMath.js';
 import { useCountUp } from '../lib/hooks.js';
 import { t } from '../lib/i18n.js';
@@ -34,7 +35,7 @@ function Tile({ icon, tone, label, value, display, sub }) {
   );
 }
 
-export function SchemeSnapshot({ lang, doc, hrefFor }) {
+export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn }) {
   const today = todayIso();
   const href = hrefFor(doc.doc_id);
   const biggest = [...doc.benefits].filter((b) => b.amount_inr !== null).sort((a, b) => b.amount_inr - a.amount_inr)[0] ?? null;
@@ -53,6 +54,8 @@ export function SchemeSnapshot({ lang, doc, hrefFor }) {
         </div>
         {href ? <a className="btn btn-ghost" href={href} target="_blank" rel="noopener noreferrer"><Icon name="file" size={16} /> {doc.source_name}</a> : <span className="pill">{doc.source_name}</span>}
       </div>
+
+      {onSummary ? <SpokenSummary lang={lang} doc={doc} onSummary={onSummary} onSpeak={onSpeak} voiceOn={voiceOn} /> : null}
 
       <div className="tiles">
         <Tile icon="list" tone="violet" label={t(lang, 'mRules')} value={doc.rules.length} display={(v) => v} sub={doc.rules.map((r) => r.field.replaceAll('_', ' ')).slice(0, 3).join(' · ') || t(lang, 'none')} />
@@ -98,6 +101,17 @@ export function SchemeSnapshot({ lang, doc, hrefFor }) {
               </ul>
             )}
           </article>
+
+          {doc.rights?.length ? (
+            <article className="card panel">
+              <h3 className="panel-title"><Icon name="shield" size={18} /> {t(lang, 'rightsTitle')}</h3>
+              <ul className="rights-list">
+                {doc.rights.map((r, i) => (
+                  <li key={i}><Icon name="check" size={14} strokeWidth={2.6} /><p>{r.text}</p><SourceChip lang={lang} page={r.page} quote={r.quote} href={href} /></li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
 
           <article className="card panel">
             <h3 className="panel-title"><Icon name="calendar" size={18} /> {t(lang, 'deadlinesTitle')}</h3>

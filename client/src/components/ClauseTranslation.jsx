@@ -6,7 +6,7 @@ import Icon from './Icon.jsx';
 import { ErrorBanner, SourceChip, Spinner } from './Shell.jsx';
 import { LANGS, t } from '../lib/i18n.js';
 
-const SECTION_ICON = { rules: 'userCheck', benefits: 'wallet', deadlines: 'calendar', documents: 'file', steps: 'list', notes: 'alert' };
+const SECTION_ICON = { rules: 'userCheck', rights: 'shield', benefits: 'wallet', deadlines: 'calendar', documents: 'file', steps: 'list', notes: 'alert' };
 
 export default function ClauseTranslation({ lang, doc, href, onTranslate }) {
   const [result, setResult] = useState(null);

@@ -63,15 +63,29 @@ export default function App() {
   const focusDoc = byId(focusId) ?? documents.at(-1);
   const progress = useMemo(() => ({ uploaded: documents.length > 0, checked: Boolean(eligibility), acted }), [documents.length, eligibility, acted]);
 
-  // Server status
+  // Server status: checked at start, again every 20 s while the server is unreachable, and when the network returns.
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const checkHealth = useCallback(() => haqApi.health()
+    .then((d) => setHealth({ known: true, readingReady: Boolean(d.reading_ready), voiceReady: Boolean(d.voice_ready) }))
+    .catch(() => setHealth({ known: false, readingReady: false, voiceReady: false })), []);
   const started = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    haqApi.health()
-      .then((d) => setHealth({ known: true, readingReady: Boolean(d.reading_ready), voiceReady: Boolean(d.voice_ready) }))
-      .catch(() => setHealth({ known: false, readingReady: false, voiceReady: false }));
-  }, []);
+    checkHealth();
+  }, [checkHealth]);
+  useEffect(() => {
+    if (health.known) return undefined;
+    const timer = setInterval(checkHealth, 20_000);
+    return () => clearInterval(timer);
+  }, [health.known, checkHealth]);
+  useEffect(() => {
+    const up = () => { setOnline(true); checkHealth(); };
+    const down = () => setOnline(false);
+    window.addEventListener('online', up);
+    window.addEventListener('offline', down);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
+  }, [checkHealth]);
 
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
@@ -204,13 +218,21 @@ export default function App() {
 
   const transcribe = async (blob) => (await haqApi.listen(blob, lang)).text;
   // Returns the playing Audio so callers can stop it or wait for it to end.
-  const speak = async (textToSay) => {
-    const { audio_base64: audio, mime_type: mime } = await haqApi.speak(textToSay.slice(0, 1500), lang);
+  const speak = async (textToSay, language = lang) => {
+    const { audio_base64: audio, mime_type: mime } = await haqApi.speak(textToSay.slice(0, 1500), language);
     const player = new Audio(`data:${mime};base64,${audio}`);
     await player.play();
     return player;
   };
   const translate = (doc, language) => haqApi.translate(doc, language);
+  // The spoken summary also mentions what changed when an older notification of the same scheme is loaded.
+  const summarize = (doc, language) => {
+    const sameName = (d) => d.scheme.name.trim().toLowerCase() === doc.scheme.name.trim().toLowerCase();
+    const older = documents
+      .filter((d) => d.doc_id !== doc.doc_id && sameName(d) && (d.scheme.publication_date ?? '') < (doc.scheme.publication_date ?? '\uffff'))
+      .sort((a, b) => (b.scheme.publication_date ?? '').localeCompare(a.scheme.publication_date ?? ''))[0] ?? null;
+    return haqApi.explain({ notification: doc, older, citizen: citizenDetailsOnly(profile), language });
+  };
 
   const goUpload = () => { scrollToSection('home'); };
 
@@ -244,7 +266,7 @@ export default function App() {
             <>
               <Section id="snapshot" step="01" eyebrow={t(lang, 'navOverview')} title={t(lang, 'overviewTitle')}>
                 <NotificationShelf lang={lang} documents={documents} focusId={focusDoc?.doc_id} onFocus={setFocusId} onRemove={removeDocument} hrefFor={hrefFor} onAdd={goUpload} />
-                {focusDoc ? <SchemeSnapshot key={focusDoc.doc_id} lang={lang} doc={focusDoc} hrefFor={hrefFor} /> : null}
+                {focusDoc ? <SchemeSnapshot key={focusDoc.doc_id} lang={lang} doc={focusDoc} hrefFor={hrefFor} onSummary={summarize} onSpeak={speak} voiceOn={health.voiceReady} /> : null}
                 {focusDoc ? <ClauseTranslation lang={lang} doc={focusDoc} href={hrefFor(focusDoc.doc_id)} onTranslate={translate} /> : null}
               </Section>
 
@@ -313,6 +335,7 @@ export default function App() {
       />
       <MobileTabs lang={lang} active={active} onAsk={() => setChatOpen(true)} />
       <Toasts toasts={toasts} onDismiss={dismiss} />
+      {!online ? <p className="net-banner" role="status">{t(lang, 'offlineNote')}</p> : null}
     </div>
   );
 }

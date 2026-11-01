@@ -23,6 +23,7 @@ class StandInGateway {
     if (/poem/i.test(args.question)) throw new NotAboutSchemes('Haq AI answers questions about schemes only.');
     return { reply: 'You qualify (p. 2).' };
   }
+  async explainNotification(facts) { return `${facts.scheme} gives ₹12,000 a year.`; }
   async translateClauses(clauses) { return new Map(clauses.map((c) => [c.id, `తెలుగు: ${c.text}`])); }
   async listen() { return { text: 'నాకు ఏ స్కాలర్‌షిప్ వస్తుంది?' }; }
   async speak() { if (this.mode !== 'ready') throw new KeyNotSet('add SARVAM_API_KEY'); return { audio_base64: 'AAAA', mime_type: 'audio/wav' }; }
@@ -129,6 +130,16 @@ describe('Haq AI endpoints', () => {
     assert.equal(body.kept_original, 0);
     assert.equal(body.clauses[0].page, 2);
     assert.equal((await post(s.api, '/translate', { notification: v2(), language: 'en' })).status, 422);
+  });
+
+  it('spoken explainer with number check', async () => {
+    const body = await (await post(s.api, '/explain', { notification: v2(), older: v1(), language: 'hi' })).json();
+    assert.deepEqual([body.script, body.fallback], ['TEST-SCHOLARSHIP gives ₹12,000 a year.', false]);
+  });
+
+  it('accepts small-business details', async () => {
+    const res = await post(s.api, '/eligibility', { notification: v2(), citizen: { occupation: 'business_owner', enterprise_size: 'micro', annual_turnover_inr: 4000000, udyam_registered: true } });
+    assert.equal(res.status, 200);
   });
 
   it('voice listen and speak', async () => {

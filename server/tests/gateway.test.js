@@ -7,7 +7,7 @@ import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { HaqGateway, geminiEndpoint, readGeminiJson } from '../src/ai/haqGateway.js';
-import { CITIZEN_HELPER, CLAUSE_TRANSLATOR, POLICY_READER } from '../src/ai/instructions.js';
+import { CITIZEN_HELPER, CLAUSE_TRANSLATOR, NOTIFICATION_EXPLAINER, POLICY_READER } from '../src/ai/instructions.js';
 import { KeyNotSet, NotAboutSchemes } from '../src/problems.js';
 import { readSettings } from '../src/settings.js';
 
@@ -87,6 +87,7 @@ describe('Haq AI boundaries', () => {
     assert.equal(copy('policy-reader.txt'), POLICY_READER.trim());
     assert.equal(copy('citizen-helper.txt'), CITIZEN_HELPER.trim());
     assert.equal(copy('clause-translator.txt'), CLAUSE_TRANSLATOR.trim());
+    assert.equal(copy('notification-explainer.txt'), NOTIFICATION_EXPLAINER.trim());
   });
 });
 
