@@ -1,6 +1,6 @@
 // "Your scheme at a glance": metric tiles, who can apply, what you get, important dates.
 import Icon from './Icon.jsx';
-import { SourceChip } from './Shell.jsx';
+import { ErrorBanner, SourceChip, Spinner } from './Shell.jsx';
 import SpokenSummary from './SpokenSummary.jsx';
 import { daysBetween, formatDate, rupees, todayIso } from '../lib/schemeMath.js';
 import { useCountUp } from '../lib/hooks.js';
@@ -35,7 +35,11 @@ function Tile({ icon, tone, label, value, display, sub }) {
   );
 }
 
-export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn }) {
+const fieldName = (lang, field) => { const name = t(lang, `field_${field}`); return name === `field_${field}` ? field.replaceAll('_', ' ') : name; };
+const plain = (text) => ({ rule: (r) => r.description, benefit: (b) => b.description, right: (r) => r.text, deadline: (d) => d.description, document: (d) => d.name, note: (n) => n })[text];
+
+export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn, reader, tx, onRetryTx }) {
+  const say = reader ?? { on: false, rule: plain('rule'), benefit: plain('benefit'), right: plain('right'), deadline: plain('deadline'), document: plain('document'), note: plain('note') };
   const today = todayIso();
   const href = hrefFor(doc.doc_id);
   const biggest = [...doc.benefits].filter((b) => b.amount_inr !== null).sort((a, b) => b.amount_inr - a.amount_inr)[0] ?? null;
@@ -55,13 +59,18 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
         {href ? <a className="btn btn-ghost" href={href} target="_blank" rel="noopener noreferrer"><Icon name="file" size={16} /> {doc.source_name}</a> : <span className="pill">{doc.source_name}</span>}
       </div>
 
+      {tx?.busy ? <p className="muted small-text tx-status"><Spinner small /> {t(lang, 'clausesTranslating')}</p> : null}
+      {tx?.problem ? (
+        <div className="tx-status"><ErrorBanner message={`${t(lang, 'clausesFailed')} (${tx.problem})`} /><button type="button" className="btn btn-soft small" onClick={onRetryTx}>{t(lang, 'tryAgainBtn')}</button></div>
+      ) : null}
+
       {onSummary ? <SpokenSummary lang={lang} doc={doc} onSummary={onSummary} onSpeak={onSpeak} voiceOn={voiceOn} /> : null}
 
       <div className="tiles">
-        <Tile icon="list" tone="violet" label={t(lang, 'mRules')} value={doc.rules.length} display={(v) => v} sub={doc.rules.map((r) => r.field.replaceAll('_', ' ')).slice(0, 3).join(' · ') || t(lang, 'none')} />
-        <Tile icon="wallet" tone="green" label={t(lang, 'mBenefit')} value={biggest?.amount_inr ?? null} display={biggest ? (v) => rupees(v) : null} sub={biggest ? `${biggest.description} · ${biggest.frequency.replace('_', ' ')}` : t(lang, 'notStated')} />
+        <Tile icon="list" tone="violet" label={t(lang, 'mRules')} value={doc.rules.length} display={(v) => v} sub={doc.rules.map((r) => fieldName(lang, r.field)).slice(0, 3).join(' · ') || t(lang, 'none')} />
+        <Tile icon="wallet" tone="green" label={t(lang, 'mBenefit')} value={biggest?.amount_inr ?? null} display={biggest ? (v) => rupees(v) : null} sub={biggest ? (say.on ? say.benefit(biggest, doc.benefits.indexOf(biggest)) : `${biggest.description} · ${t(lang, `freq_${biggest.frequency}`)}`) : t(lang, 'notStated')} />
         <Tile icon="calendar" tone="amber" label={t(lang, 'mDeadline')} value={upcoming ? formatDate(upcoming.date) : '—'} sub={upcoming ? t(lang, 'daysLeft', daysBetween(today, upcoming.date)) : t(lang, 'notStated')} />
-        <Tile icon="file" tone="blue" label={t(lang, 'mDocs')} value={doc.required_documents.length} display={(v) => v} sub={doc.required_documents.slice(0, 2).map((d) => d.name).join(' · ') || t(lang, 'notStated')} />
+        <Tile icon="file" tone="blue" label={t(lang, 'mDocs')} value={doc.required_documents.length} display={(v) => v} sub={doc.required_documents.slice(0, 2).map((d, i) => say.document(d, i)).join(' · ') || t(lang, 'notStated')} />
       </div>
 
       <div className="overview-grid">
@@ -75,8 +84,8 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
                   <li key={rule.rule_id} className="rule-row">
                     <span className={`letter tone-${meta.tone}`}>{meta.letter}</span>
                     <div className="rule-body">
-                      <p className="rule-desc">{rule.description}</p>
-                      <p className="rule-value">{rule.field.replaceAll('_', ' ')} · <b>{ruleValue(rule)}</b></p>
+                      <p className="rule-desc">{say.rule(rule)}</p>
+                      <p className="rule-value">{fieldName(lang, rule.field)}{say.on ? null : <> · <b>{ruleValue(rule)}</b></>}</p>
                     </div>
                     <SourceChip lang={lang} page={rule.page} quote={rule.quote} href={href} />
                   </li>
@@ -93,9 +102,9 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
               <ul className="benefit-list">
                 {doc.benefits.map((b, i) => (
                   <li key={i}>
-                    <div className="benefit-line"><span>{b.description}</span><b>{b.amount_inr !== null ? rupees(b.amount_inr) : '—'}</b></div>
+                    <div className="benefit-line"><span>{say.benefit(b, i)}</span><b>{b.amount_inr !== null ? rupees(b.amount_inr) : '—'}</b></div>
                     <div className="bar"><span style={{ width: `${maxBenefit && b.amount_inr ? Math.max(6, (b.amount_inr / maxBenefit) * 100) : 0}%` }} /></div>
-                    <p className="benefit-meta">{b.frequency.replace('_', ' ')} <SourceChip lang={lang} page={b.page} quote={b.quote} href={href} /></p>
+                    <p className="benefit-meta">{t(lang, `freq_${b.frequency}`)} <SourceChip lang={lang} page={b.page} quote={b.quote} href={href} /></p>
                   </li>
                 ))}
               </ul>
@@ -107,7 +116,7 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
               <h3 className="panel-title"><Icon name="shield" size={18} /> {t(lang, 'rightsTitle')}</h3>
               <ul className="rights-list">
                 {doc.rights.map((r, i) => (
-                  <li key={i}><Icon name="check" size={14} strokeWidth={2.6} /><p>{r.text}</p><SourceChip lang={lang} page={r.page} quote={r.quote} href={href} /></li>
+                  <li key={i}><Icon name="check" size={14} strokeWidth={2.6} /><p>{say.right(r, i)}</p><SourceChip lang={lang} page={r.page} quote={r.quote} href={href} /></li>
                 ))}
               </ul>
             </article>
@@ -122,7 +131,7 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
                   return (
                     <li key={i} className={past ? 'is-past' : ''}>
                       <span className="tl-dot" />
-                      <div><b>{d.date ? formatDate(d.date) : t(lang, 'notStated')}</b><p>{d.description}</p></div>
+                      <div><b>{d.date ? formatDate(d.date) : t(lang, 'notStated')}</b><p>{say.deadline(d, i)}</p></div>
                       <SourceChip lang={lang} page={d.page} quote={d.quote} href={href} />
                     </li>
                   );
@@ -136,7 +145,7 @@ export function SchemeSnapshot({ lang, doc, hrefFor, onSummary, onSpeak, voiceOn
       {doc.notes.length ? (
         <details className="notes standalone">
           <summary><Icon name="alert" size={15} /> {t(lang, 'notesTitle')} ({doc.notes.length})</summary>
-          <ul>{doc.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+          <ul>{doc.notes.map((n, i) => <li key={i}>{say.note(n, i)}</li>)}</ul>
         </details>
       ) : null}
     </>

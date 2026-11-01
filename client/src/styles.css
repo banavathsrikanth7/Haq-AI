@@ -731,3 +731,11 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .summary-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; }
 .summary-bar small { color: var(--muted); font-size: 12.5px; }
 .net-banner { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; padding: 10px 16px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); font-weight: 700; font-size: 13px; box-shadow: var(--shadow); }
+
+/* Clause translation status and the full translated notification (collapsed by default) */
+.tx-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; }
+.tx-status .error-banner, .tx-status > div:first-child { flex: 1; min-width: 240px; }
+details.clause-translation > summary { list-style: none; cursor: pointer; }
+details.clause-translation > summary::-webkit-details-marker { display: none; }
+details.clause-translation[open] > summary { margin-bottom: 12px; }
+details.clause-translation .switch { margin-bottom: 8px; }

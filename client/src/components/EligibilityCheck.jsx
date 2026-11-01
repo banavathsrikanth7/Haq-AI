@@ -97,7 +97,8 @@ function VerdictRing({ passed, total, verdict }) {
 
 const STATUS = { passed: { icon: 'check', cls: 'is-pass' }, failed: { icon: 'cross', cls: 'is-fail' }, unknown: { icon: 'help', cls: 'is-unknown' } };
 
-export default function EligibilityCheck({ lang, documents, docId, onPickDoc, profile, onProfile, onCheck, checking, result, error, hrefFor, onExplain, onSpeak, voiceOn }) {
+export default function EligibilityCheck({ lang, documents, docId, onPickDoc, profile, onProfile, onCheck, checking, result, error, hrefFor, onExplain, onSpeak, voiceOn, reader }) {
+  const condText = (c) => reader?.ruleById(c.rule_id, c.description) ?? c.description;
   const doc = documents.find((d) => d.doc_id === docId);
   const fields = useMemo(() => {
     const fromRules = [...new Set((doc?.rules ?? []).map((r) => r.field))];
@@ -167,7 +168,7 @@ export default function EligibilityCheck({ lang, documents, docId, onPickDoc, pr
             </div>
             <div className="verdict-actions">
               <button type="button" className="btn btn-ghost" onClick={() => { setMode('wizard'); setStep(0); }}><Icon name="edit" size={16} /> {t(lang, 'editAnswers')}</button>
-              <ListenButton lang={lang} text={`${result.scheme_name}. ${t(lang, result.verdict)}. ${result.conditions.map((c) => `${c.description}: ${t(lang, `cond_${c.status}`)}`).join('. ')}`} onSpeak={onSpeak} voiceOn={voiceOn} className="btn btn-ghost" />
+              <ListenButton lang={lang} text={`${result.scheme_name}. ${t(lang, result.verdict)}. ${result.conditions.map((c) => `${condText(c)}: ${t(lang, `cond_${c.status}`)}`).join('. ')}`} onSpeak={onSpeak} voiceOn={voiceOn} className="btn btn-ghost" />
               <button type="button" className="btn btn-soft" onClick={onExplain}><Icon name="sparkle" size={16} /> {t(lang, 'explainIn')}</button>
             </div>
           </div>
@@ -176,8 +177,8 @@ export default function EligibilityCheck({ lang, documents, docId, onPickDoc, pr
               <li key={c.rule_id} className={STATUS[c.status].cls} style={{ animationDelay: `${i * 70}ms` }}>
                 <span className="cond-icon"><Icon name={STATUS[c.status].icon} size={14} strokeWidth={2.8} /></span>
                 <div className="cond-body">
-                  <p>{c.description}</p>
-                  <small>{t(lang, 'ruleLbl')}: {c.rule_text} · {t(lang, 'youLbl')}: {c.user_value === null ? '—' : c.field === 'annual_family_income_inr' ? rupees(c.user_value) : String(c.user_value)}</small>
+                  <p>{condText(c)}</p>
+                  <small>{reader?.on ? null : <>{t(lang, 'ruleLbl')}: {c.rule_text} · </>}{t(lang, 'youLbl')}: {c.user_value === null ? '—' : c.field === 'annual_family_income_inr' ? rupees(c.user_value) : String(c.user_value)}</small>
                 </div>
                 {c.status === 'unknown' ? (
                   <button type="button" className="btn btn-soft small" onClick={() => { setMode('wizard'); setStep(Math.max(0, fields.indexOf(c.field))); }}>{t(lang, 'next')}</button>

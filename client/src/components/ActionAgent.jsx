@@ -7,7 +7,7 @@ import ApplyPortal from './ApplyPortal.jsx';
 import ListenButton from './ListenButton.jsx';
 import { SourceChip } from './Shell.jsx';
 import { actionPlanCalendar, formatDate } from '../lib/schemeMath.js';
-import { t } from '../lib/i18n.js';
+import { QUESTIONS, t } from '../lib/i18n.js';
 
 const KIND_ICON = {
   check: 'userCheck', confirm: 'help', blocked: 'cross', alternative: 'refresh', deadline_passed: 'alert',
@@ -22,9 +22,31 @@ function downloadCalendar(schemeName, actions) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function ActionAgent({ lang, plan, href, onTick, onSpeak, voiceOn }) {
+// Titles and details in the page language; notification wording comes from the number-checked translation.
+function localAction(lang, a, reader) {
+  if (lang === 'en' || !reader) return a;
+  const ask = (f) => QUESTIONS[lang]?.[f] ?? QUESTIONS.en[f] ?? f;
+  switch (a.kind) {
+    case 'check': return { ...a, title: t(lang, 'pt_check'), detail: t(lang, 'pd_check') };
+    case 'confirm': return { ...a, title: t(lang, 'pt_confirm'), detail: a.fields ? a.fields.map(ask).join(' ') : a.detail };
+    case 'blocked': return { ...a, title: t(lang, 'pt_blocked'), detail: a.rule_ids ? a.rule_ids.map((id) => reader.ruleById(id, id)).join('; ') : a.detail };
+    case 'alternative': return { ...a, title: t(lang, 'pt_alternative'), detail: t(lang, 'pd_alternative') };
+    case 'deadline_passed': return { ...a, title: t(lang, 'pt_deadline_passed'), detail: a.deadline_index >= 0 ? `${reader.deadlineAt(a.deadline_index, a.detail)} ${t(lang, 'pd_watch')}` : a.detail };
+    case 'collect': return { ...a, title: t(lang, 'pt_collect', a.count ?? a.detail.split(', ').length), detail: a.detail.split(', ').map(reader.documentByName).join(', ') };
+    case 'step': return a.order != null ? { ...a, title: t(lang, 'pt_step', a.order), detail: reader.step(a.order, a.detail) } : a;
+    case 'submit': return { ...a, title: t(lang, 'pt_submit'), detail: a.deadline_index >= 0 ? reader.deadlineAt(a.deadline_index, a.detail) : a.detail };
+    default: return a;
+  }
+}
+
+export default function ActionAgent({ lang, plan: serverPlan, href, onTick, onSpeak, voiceOn, reader }) {
+  const plan = serverPlan && lang !== 'en' ? {
+    ...serverPlan,
+    headline: t(lang, `ph_${serverPlan.verdict}`, serverPlan.verdict === 'eligible' ? (serverPlan.checklist?.deadline?.date ? serverPlan.days_left : null) : undefined),
+    actions: serverPlan.actions.map((a) => localAction(lang, a, reader)),
+  } : serverPlan;
   const [ticks, setTicks] = useState({});
-  useEffect(() => setTicks({}), [plan?.doc_id]);
+  useEffect(() => setTicks({}), [serverPlan?.doc_id]);
   if (!plan) return <p className="empty">{t(lang, 'planEmpty')}</p>;
 
   const { checklist } = plan;
@@ -97,7 +119,7 @@ export default function ActionAgent({ lang, plan, href, onTick, onSpeak, voiceOn
                     <label>
                       <input type="checkbox" checked={Boolean(ticks[d.name])} onChange={() => { setTicks({ ...ticks, [d.name]: !ticks[d.name] }); onTick?.(); }} />
                       <span className="tick-box"><Icon name="check" size={13} strokeWidth={3} /></span>
-                      <span className="tick-text">{d.name}</span>
+                      <span className="tick-text">{reader ? reader.documentByName(d.name) : d.name}</span>
                     </label>
                     <SourceChip lang={lang} page={d.page} quote={d.quote} href={href} />
                   </li>

@@ -40,6 +40,9 @@ export function applicationChecklist(doc, today = new Date()) {
  * @param doc validated policy document
  * @param eligibility result of checkEligibility(doc, citizen) or null when not checked yet
  */
+// Position of a deadline in the notification, so the page can show its translated wording.
+const deadlineIndex = (doc, d) => doc.deadlines.findIndex((x) => x === d || (x.description === d.description && x.date === d.date));
+
 export function planActions(doc, eligibility, today = new Date()) {
   const todayIso = iso(today);
   const checklist = applicationChecklist(doc, today);
@@ -57,6 +60,7 @@ export function planActions(doc, eligibility, today = new Date()) {
       kind: 'confirm',
       title: 'Share the missing details',
       detail: eligibility.missing_fields.map((f) => MISSING_DETAIL_QUESTIONS[f]).join(' '),
+      fields: eligibility.missing_fields,
       urgency: 'now',
     });
   }
@@ -66,13 +70,14 @@ export function planActions(doc, eligibility, today = new Date()) {
       kind: 'blocked',
       title: 'You do not meet these conditions',
       detail: failed.map((c) => `${c.description} (${c.rule_text})`).join('; '),
+      rule_ids: failed.map((c) => c.rule_id),
       page: failed[0]?.page ?? null,
       urgency: 'anytime',
     });
     add({ kind: 'alternative', title: 'Look at other schemes', detail: 'Upload another scheme or a newer notification; rules are often revised.', urgency: 'anytime' });
   }
   if (!deadline && passed) {
-    add({ kind: 'deadline_passed', title: 'The last date has passed', detail: `${passed.description} (${passed.date}). Watch the department website for the next notification.`, page: passed.page, urgency: 'anytime' });
+    add({ kind: 'deadline_passed', title: 'The last date has passed', detail: `${passed.description} (${passed.date}). Watch the department website for the next notification.`, deadline_index: doc.deadlines.indexOf(passed), page: passed.page, urgency: 'anytime' });
   }
   if (verdict === 'eligible' || verdict === 'need_more_info' || verdict === 'not_checked') {
     const collectBy = deadline ? (daysBetween(todayIso, deadline) > 10 ? addDays(deadline, -7) : todayIso) : null;
@@ -81,16 +86,17 @@ export function planActions(doc, eligibility, today = new Date()) {
         kind: 'collect',
         title: `Collect ${doc.required_documents.length} document${doc.required_documents.length === 1 ? '' : 's'}`,
         detail: doc.required_documents.map((d) => d.name).join(', '),
+        count: doc.required_documents.length,
         page: doc.required_documents[0]?.page ?? null,
         due: collectBy,
         urgency: urgencyOf(collectBy, todayIso),
       });
     }
     for (const step of checklist.application_steps) {
-      add({ kind: 'step', title: `Step ${step.order}`, detail: step.text, page: step.page, due: deadline, urgency: urgencyOf(deadline, todayIso) });
+      add({ kind: 'step', title: `Step ${step.order}`, detail: step.text, order: step.order, page: step.page, due: deadline, urgency: urgencyOf(deadline, todayIso) });
     }
     if (deadline) {
-      add({ kind: 'submit', title: 'Submit before the last date', detail: checklist.deadline.description, page: checklist.deadline.page, due: deadline, urgency: urgencyOf(deadline, todayIso) });
+      add({ kind: 'submit', title: 'Submit before the last date', detail: checklist.deadline.description, deadline_index: deadlineIndex(doc, checklist.deadline), page: checklist.deadline.page, due: deadline, urgency: urgencyOf(deadline, todayIso) });
     }
     // The apply link is given only once the citizen is confirmed eligible.
     const portal = checklist.portal;

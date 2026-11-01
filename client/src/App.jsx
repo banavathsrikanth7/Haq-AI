@@ -15,6 +15,7 @@ import { haqApi } from './lib/haqApi.js';
 import { citizenDetailsOnly, addNotifications, pickVersionPair } from './lib/schemeMath.js';
 import { useTheme, useToasts } from './lib/hooks.js';
 import { t } from './lib/i18n.js';
+import { clauseReader } from './lib/clauseText.js';
 
 export default function App() {
   const [lang, setLang] = useState('en');
@@ -61,6 +62,33 @@ export default function App() {
   const hrefFor = useCallback((docId) => fileUrls[docId] ?? null, [fileUrls]);
   const byId = useCallback((id) => documents.find((d) => d.doc_id === id), [documents]);
   const focusDoc = byId(focusId) ?? documents.at(-1);
+  // Notification clauses in Telugu / Hindi: translated once per notification and language, kept for the tab.
+  // Every translated clause is number-checked on the server; anything that fails keeps its original wording.
+  const [clauseTx, setClauseTx] = useState({});
+  const txKey = (docId, language) => `${docId}:${language}`;
+  const asked = useRef(new Set());
+  const loadClauses = useCallback(async (doc, language, again = false) => {
+    const key = txKey(doc.doc_id, language);
+    if (asked.current.has(key) && !again) return;
+    asked.current.add(key);
+    setClauseTx((all) => ({ ...all, [key]: { busy: true } }));
+    try {
+      const result = await haqApi.translate(doc, language);
+      setClauseTx((all) => ({ ...all, [key]: { result } }));
+    } catch (err) {
+      setClauseTx((all) => ({ ...all, [key]: { problem: err.message } }));
+    }
+  }, []);
+  const eligDoc = byId(eligDocId);
+  useEffect(() => {
+    if (lang === 'en') return;
+    for (const doc of [focusDoc, eligDoc, byId(pair[0]), byId(pair[1])]) {
+      if (doc && !clauseTx[txKey(doc.doc_id, lang)]) loadClauses(doc, lang);
+    }
+  }, [lang, focusDoc, eligDoc, pair, byId, clauseTx, loadClauses]);
+  const txFor = (doc) => (doc && lang !== 'en' ? clauseTx[txKey(doc.doc_id, lang)] ?? { busy: true } : null);
+  const readerFor = (doc) => clauseReader(txFor(doc)?.result, doc);
+
   const progress = useMemo(() => ({ uploaded: documents.length > 0, checked: Boolean(eligibility), acted }), [documents.length, eligibility, acted]);
 
   // Server status: checked at start, again every 20 s while the server is unreachable, and when the network returns.
@@ -224,7 +252,6 @@ export default function App() {
     await player.play();
     return player;
   };
-  const translate = (doc, language) => haqApi.translate(doc, language);
   // The spoken summary also mentions what changed when an older notification of the same scheme is loaded.
   const summarize = (doc, language) => {
     const sameName = (d) => d.scheme.name.trim().toLowerCase() === doc.scheme.name.trim().toLowerCase();
@@ -266,8 +293,8 @@ export default function App() {
             <>
               <Section id="snapshot" step="01" eyebrow={t(lang, 'navOverview')} title={t(lang, 'overviewTitle')}>
                 <NotificationShelf lang={lang} documents={documents} focusId={focusDoc?.doc_id} onFocus={setFocusId} onRemove={removeDocument} hrefFor={hrefFor} onAdd={goUpload} />
-                {focusDoc ? <SchemeSnapshot key={focusDoc.doc_id} lang={lang} doc={focusDoc} hrefFor={hrefFor} onSummary={summarize} onSpeak={speak} voiceOn={health.voiceReady} /> : null}
-                {focusDoc ? <ClauseTranslation lang={lang} doc={focusDoc} href={hrefFor(focusDoc.doc_id)} onTranslate={translate} /> : null}
+                {focusDoc ? <SchemeSnapshot key={focusDoc.doc_id} lang={lang} doc={focusDoc} hrefFor={hrefFor} reader={readerFor(focusDoc)} tx={txFor(focusDoc)} onRetryTx={() => loadClauses(focusDoc, lang, true)} onSummary={summarize} onSpeak={speak} voiceOn={health.voiceReady} /> : null}
+                {focusDoc ? <ClauseTranslation lang={lang} href={hrefFor(focusDoc.doc_id)} tx={txFor(focusDoc)} /> : null}
               </Section>
 
               <Section id="changes" step="02" eyebrow={t(lang, 'navChanges')} title={t(lang, 'changesTitle')} sub={t(lang, 'changesSub')}>
@@ -283,6 +310,7 @@ export default function App() {
                   error={compareError}
                   hrefFor={hrefFor}
                   onAdd={goUpload}
+                  translateLabel={lang === 'en' ? null : (label) => readerFor(byId(pair[1])).byText(label) ?? readerFor(byId(pair[0])).byText(label) ?? label}
                 />
               </Section>
 
@@ -300,6 +328,7 @@ export default function App() {
                   error={eligError}
                   hrefFor={hrefFor}
                   onExplain={explainEligibility}
+                  reader={readerFor(eligDoc)}
                   onSpeak={speak}
                   voiceOn={health.voiceReady}
                 />
@@ -307,7 +336,7 @@ export default function App() {
 
               {plan ? (
                 <Section id="action-plan" step="04" eyebrow={t(lang, 'navChecklist')} title={t(lang, 'checklistTitle')} sub={t(lang, 'checklistSub')}>
-                  <ActionAgent lang={lang} plan={plan} href={hrefFor(plan.doc_id)} onTick={() => setActed(true)} onSpeak={speak} voiceOn={health.voiceReady} />
+                  <ActionAgent lang={lang} plan={plan} reader={readerFor(byId(plan.doc_id))} href={hrefFor(plan.doc_id)} onTick={() => setActed(true)} onSpeak={speak} voiceOn={health.voiceReady} />
                 </Section>
               ) : null}
             </>

@@ -11,7 +11,7 @@ const TYPE = { added: { tone: 'green', icon: 'sparkle' }, removed: { tone: 'red'
 const VERDICT = { eligible: 'green', not_eligible: 'red', need_more_info: 'amber', rule_not_verified: 'grey' };
 const SHORT = { eligible: 'Eligible', not_eligible: 'Not eligible', need_more_info: 'Need info', rule_not_verified: 'No rules' };
 
-function ChangeCard({ lang, c, oldHref, newHref, delay }) {
+function ChangeCard({ lang, c, oldHref, newHref, delay, translateLabel }) {
   const meta = TYPE[c.change_type];
   const numeric = typeof c.old_value === 'number' && typeof c.new_value === 'number';
   const max = numeric ? Math.max(c.old_value, c.new_value) || 1 : 1;
@@ -22,7 +22,7 @@ function ChangeCard({ lang, c, oldHref, newHref, delay }) {
         <span className="change-cat">{c.category}</span>
         {c.change_pct !== null ? <span className={`delta ${c.change_pct >= 0 ? 'up' : 'down'}`}>{c.change_pct > 0 ? '▲ +' : '▼ '}{c.change_pct.toFixed(1)}%</span> : null}
       </header>
-      <h4>{c.label}</h4>
+      <h4>{translateLabel ? translateLabel(c.label) : c.label}</h4>
       <div className="before-after">
         <div className={`ba old${c.change_type === 'added' ? ' is-empty' : ''}`}>
           <small>{t(lang, 'before')}</small>
@@ -82,7 +82,7 @@ function ImpactCard({ lang, p }) {
   );
 }
 
-export default function ChangeIntelligence({ lang, documents, oldId, newId, onPick, result, impact, loading, error, hrefFor, onAdd }) {
+export default function ChangeIntelligence({ lang, documents, oldId, newId, onPick, result, impact, loading, error, hrefFor, onAdd, translateLabel }) {
   const [filter, setFilter] = useState('all');
   const shown = useMemo(() => (result?.revisions ?? []).filter((c) => filter === 'all' || c.change_type === filter), [result, filter]);
 
@@ -132,7 +132,7 @@ export default function ChangeIntelligence({ lang, documents, oldId, newId, onPi
           </div>
           {shown.length === 0 ? <p className="empty">{t(lang, 'noDiff')}</p> : (
             <div className="change-grid">
-              {shown.map((c, i) => <ChangeCard key={`${c.category}-${c.key}`} lang={lang} c={c} oldHref={hrefFor(result.older_id)} newHref={hrefFor(result.newer_id)} delay={i * 60} />)}
+              {shown.map((c, i) => <ChangeCard translateLabel={translateLabel} key={`${c.category}-${c.key}`} lang={lang} c={c} oldHref={hrefFor(result.older_id)} newHref={hrefFor(result.newer_id)} delay={i * 60} />)}
             </div>
           )}
         </>
